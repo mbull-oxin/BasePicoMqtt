@@ -24,7 +24,7 @@ class dc:
         self._buf[self._read_idx]=inst_i
         self._totalizer+=inst_i
         self._read_idx+=1
-        if self._read_idx>=20
+        if self._read_idx>=10:
             self._read_idx=0
         self._reading=(self._totalizer/10)*1.1107
         #print('done')
