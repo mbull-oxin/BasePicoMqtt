@@ -1,63 +1,117 @@
 # main.py
 from _thread import allocate_lock,start_new_thread
 import umqttsimple as mqtt
-import pyb,array,sys
+import machine,array,time,micropython,json
+
+micropython.alloc_emergency_exception_buf(200)
+
 USE_DC=[]
 
 DISCON=0
 CONN=1
 ERR=2
 
+class RunFlag:
+    def __init__(self,flag=True):
+        self._flag=flag
+    def set(self,state):
+        self._flag=state
+    def __bool__(self):
+        if self._flag:
+            return True
+        else:
+            return False
+
 class MqttClient:
-    def __init__(self,queue,conf):
-        self._queue=queue
-        self.client=mqtt.MQTTClient(conf['id'],conf['server'],conf['port'])
-        self.run=True
+    def __init__(self,conf):
+        print(conf)
+        self.client=mqtt.MQTTClient(conf['id'],conf['server'],int(conf['port']))
+        self._run=None
         self.con_stat=DISCON
         self.machine_id=conf['id']
-    def run(self,d_s):
-        while self.run:
-            msg=self._queue.get(timeout=20)
-            if not msg:
+        try:
+            print(self.client.port)
+            self.client.connect(clean_session=True)
+            self.con_stat=CONN
+            print('[MqttClient] contected')
+        except Exception as exc:
+            print('[MqttClient] error connecting to broker',exc)
+            self.con_stat=ERR
+            #continue
+    def run(self,d_s,run_flag):
+        self._run=run_flag
+        while self._run:
+            #print('getting event')
+            msg=d_s.get(timeout=20)
+            #print('[MqttClient] got',msg)
+            if not msg and self.con_stat==CONN:
+                print('ping')
                 self.client.ping()
                 continue
-            if self.conn_stat!=CONN:
+            if msg and self.con_stat!=CONN:
                 try:
+                    print(self.client.port)
                     self.client.connect(clean_session=True)
                     self.con_stat=CONN
-                except:
+                    print('[MqttClient] contected')
+                except Exception as exc:
+                    print('[MqttClient] error connecting to broker',exc)
                     self.con_stat=ERR
-            print('sending',msg)
-            self.client.publish('%s/%s' % (self.machine_id,msg[0]),msg[1])
+                    continue
+            if msg:
+                print('[MqttClient] sending',msg)
+                try:
+                    self.client.publish('%s/%s' % (self.machine_id,msg[0]),msg[1])
+                except Exception as exc:
+                    print('[MqttClient] error publishing to broker',exc)
+                    self.con_stat=ERR
+                    continue
+        self._run.set(False)
 
-class Queue(list):
+class Queue():
     def __init__(self):
-        list.__init__(self,[])
+        self._list=[]
         self._mutex=allocate_lock()
         self._event=allocate_lock()
         self._event.acquire()
-    def push(self,obj):
+        self._timer=machine.Timer()
+    def put(self,obj):
         with self._mutex:
-            self.append(obj)
+            self._list.append(obj)
             self._event.release()
-        self._event.acquire()
+        time.sleep(.1)
+        self._event.acquire(False)
+    def _timeout(self,timer):
+        print('timeout',timer,self._timer)
+        if timer==self._timer:
+            self._event.release()
+            micropython.schedule(self._reacquire,[])
+    def _reacquire(self,*args):
+            while 1:
+                if self._event.acquire(False):
+                    break
     def get(self,timeout=None):
-        if len(self):
+        if timeout:
+            self._timer.init(mode=machine.Timer.ONE_SHOT,period=timeout*1000,callback=self._timeout)
+        print('entering loop with timeout',timeout*1000)
+        while 1:
+            #print('entering loop with timeout',timeout*1000)
+            gotit=self._event.acquire(False)
+            #print(gotit)
+            if gotit:
+                self._event.release()
+                time.sleep(1)
+                break
+            else:
+                time.sleep(0.1)
+        if len(self._list):
             with self._mutex:
-                evt=this.pop(0)
+                evt=self._list.pop(0)
             return evt
         else:
-            gotit=self._event.acquire(True,timeout)
-            if gotit:
-                with self._mutex:
-                    evt=this.pop(0)
-                self._event.release()
-                #self._event.acquire()
-                return evt
-            else:
-                return None
+            return None
 
-class Scheduler:
+class DcManager:
     def __init__(self,queue):
         self._queue=queue
         self.dc_inst={}
