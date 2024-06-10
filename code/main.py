@@ -38,11 +38,10 @@ class MqttClient:
             print('[MqttClient] error connecting to broker',exc)
             self.con_stat=ERR
             #continue
-    def run(self,d_s,run_flag):
-        self._run=run_flag
+    def run(self,queue):
         while self._run:
             #print('getting event')
-            msg=d_s.get(timeout=20)
+            msg=queue.get(timeout=20)
             #print('[MqttClient] got',msg)
             if not msg and self.con_stat==CONN:
                 print('ping')
@@ -56,6 +55,7 @@ class MqttClient:
                     print('[MqttClient] contected')
                 except Exception as exc:
                     print('[MqttClient] error connecting to broker',exc)
+                    print('[MqttClient] dropped msg - %s' % msg)
                     self.con_stat=ERR
                     continue
             if msg:
@@ -100,7 +100,7 @@ class Queue():
             #print(gotit)
             if gotit:
                 self._event.release()
-                time.sleep(1)
+                time.sleep(.5) # is this really required??
                 break
             else:
                 time.sleep(0.1)
@@ -120,16 +120,17 @@ class Scheduler:
         self._multipliers={}
         self.readings=array.array('H')
         self._count=0
-    def add(self,dc):
-        module=sys.modules[dc.__module__]
-        if module.SAMPLE_RATE!=self.sample_freq and module.__name__ not in self.req_samp_rates:
-            self.req_sample_rates[module.__name__]=module.SAMPLE_RATE
+    def add(self,module,dc):
+        #module=sys.modules[dc.__module__]
+        mod_name=module.__name__
+        if module.SAMPLE_RATE!=self.sample_freq and mod_name not in self.req_samp_rates:
+            self.req_sample_rates[mod_name]=module.SAMPLE_RATE
             self.samp_freq=max(self.samp_freq,module.SAMPLE_RATE)
             self.recalc_mults()
-        if module.__name__ in self.dc_inst:
-            self.dc_inst[module.__name__].append(dc)
+        if mod_name in self.dc_inst:
+            self.dc_inst[mod_name].append(dc)
         else:
-            self.dc_inst[module.__name__]=[dc]
+            self.dc_inst[mod_name]=[dc]
     def recalc_mults(self):
         self._multipliers={}
         for mod in self.req_samp_rates:
@@ -197,7 +198,7 @@ if __name__=='__main__':
         ds_m=sys.modules[config[key]['module']]
         if not ('dc' in dir(ds_m) and 'SAMPLE_RATE' in dir(ds_m)):
             raise AttributeError('not a dc module')
-        sched.add(ds_m.DC(config[key]['addr'],key))
-    start_new_thread(cli.run,(),{})
+        sched.add(ds_m,ds_m.DC(config[key]['addr']))
+    start_new_thread(cli.run,(queue),{})
     sched.run()
     
