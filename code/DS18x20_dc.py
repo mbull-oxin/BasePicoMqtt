@@ -12,7 +12,7 @@ ds_registry={}
 
 class DC(BaseDC):
     def __init__(self,addr,name):
-        global(ds_registry)
+        global ds_registry
         self.addr=addr
         pin_no,rom=addr.split('/')
         BaseDC.__init__(self,rom,name)
@@ -22,8 +22,8 @@ class DC(BaseDC):
             ds_registry[pin_no].convert_temp()
             time.sleep(.75)
         self.ds=ds_registry[pin_no]
-        if rom not in ds.scan():
+        if rom not in self.ds.scan():
             raise AttributeError('rom not found')
         self.rom=int(rom)
     def getReading(self):
-        reutrn (self.addr,self.ds.read_temp(self.rom))
+        return (self.addr,self.ds.read_temp(self.rom))
