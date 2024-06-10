@@ -1,7 +1,7 @@
 # main.py
 from _thread import allocate_lock,start_new_thread
 import umqttsimple as mqtt
-import machine,array,time,micropython,json
+import machine,array,time,micropython,pyb
 
 micropython.alloc_emergency_exception_buf(200)
 
@@ -111,7 +111,7 @@ class Queue():
         else:
             return None
 
-class DcManager:
+class Scheduler:
     def __init__(self,queue):
         self._queue=queue
         self.dc_inst={}
