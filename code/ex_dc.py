@@ -1,24 +1,11 @@
 import machine,micropython,time
 
-dc_name='example_dc'
+SAMPLE_FREQ=10  # 10 hz sample freq....
 
-class dc:
-    def __init__(self,conf):
-        self.timer=machine.Timer()
+class DC:
+    def __init__(self,conf,name):
         self.conf=conf
-        self._reading=0
-    def run(self,run_flag):
-        self._run=run_flag
-        self.timer.init(mode=machine.Timer.PERIODIC,freq=int(self.conf['freq']),callback=self.reading)
-    def reading(self,timer):
-        # do the reading here
-        print('reading timer')
-        self._reading=time.time()
-        if not self._run:
-            timer.deinit()
-        #print('done')
+        self.r_id=name
     def getReading(self):
-        irq_state=machine.disable_irq()
-        r=self._reading
-        machine.enable_irq(irq_state)
-        return r
+        ''' getReading should return tuple of device id and dict representing reading'''
+        return (self.r_id,{})

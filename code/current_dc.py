@@ -1,10 +1,11 @@
 import machine,micropython,time
 
-dc_name='current_dc'
+SAMPLE_FREQ=1
 
-class dc:
-    def __init__(self,conf):
+class DC:
+    def __init__(self,conf,name):
         self.conf=conf
+        self.r_id=name
         self.timer=machine.Timer()
         self._reading=0
         self._buf=array.array('H',b'\x00\x00'*10)
@@ -12,14 +13,12 @@ class dc:
         self._totalizer=sum(self._buf)
         self.adc=machine.ADC(machine.Pin(conf['adc_pin']))
         self.adc_mult=3.3/65535
-    def run(self,run_flag):
-        self._run=run_flag
         self.timer.init(mode=machine.Timer.PERIODIC,freq=int(conf['mains_freq'])*10,callback=self.reading)
     def reading(self,timer):
         # do the reading here
         #print('reading timer')
         inst_v=self.adc.read_u16()*self.adc_mult
-        inst_i=inst_i*(20/3.3)
+        inst_i=inst_v*(20/3.3)
         self._totalizer-=self._buf[self._read_idx]
         self._buf[self._read_idx]=inst_i
         self._totalizer+=inst_i
@@ -34,4 +33,4 @@ class dc:
         irq_state=machine.disable_irq()
         r=self._reading
         machine.enable_irq(irq_state)
-        return r
+        return (self.r_id,r)

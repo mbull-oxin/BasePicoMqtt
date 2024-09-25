@@ -1,0 +1,14 @@
+[network]
+	ssid='digitao'
+	key='y3ar_aud1o'
+[network.mqtt]
+	id='node_1'
+	server='oxin-ssem.local'
+	port=1883
+[temp1]
+	module='max31855_dc'
+	address=[6,5]
+[enviro1]
+	module='ens160_dc'
+	bus=[0,1,0]
+	dht_pin=14
