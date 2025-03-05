@@ -64,7 +64,7 @@ class ENS160:
             else:
                 crc = tmp ^ polynomial
         return crc
-    def __init__(self,i2c_bus,dev_addr=0x53,dht_pin=None,sda=None,scl=None):
+    def __init__(self,i2c_bus,dev_addr=0x53,dht_pin=None,sda=None,scl=None,dht_vers=11):
         if sda==None:
             if i2c_bus==0:
                 sda=0
@@ -75,7 +75,10 @@ class ENS160:
         self._bus=I2C(i2c_bus,scl=Pin(scl),sda=Pin(sda),freq=400_000)
         self.dev=dev_addr
         if dht_pin:
-            self.dht=dht.DHT11(Pin(dht_pin))
+            if dht_vers in (2,22):
+                self.dht=dht.DHT22(Pin(dht_pin))
+            else:
+                self.dht=dht.DHT11(Pin(dht_pin))
             self.dht.measure()
             self._curr_humidity=self.dht.humidity()
             self._curr_temp=self.dht.temperature()
@@ -99,7 +102,7 @@ class ENS160:
     def getReading(self):
         if self._th_update:
             self._bus.writeto_mem(self.dev,ENS160_TEMP_IN_REG,struct.pack('<H',int((self._curr_temp+273.15)*64)))
-            self._bus.writeto_mem(self.dev,ENS160_RH_IN_REG,struct.pack('<H',self._curr_humidity*512))
+            self._bus.writeto_mem(self.dev,ENS160_RH_IN_REG,struct.pack('<H',int(self._curr_humidity*512)))
             self._th_update=False
         aqi=self._bus.readfrom_mem(self.dev,ENS160_DATA_AQI_REG,1)
         tvoc=self._bus.readfrom_mem(self.dev,ENS160_DATA_TVOC_REG,2)
@@ -123,9 +126,10 @@ class DC:
                 sda=2
         if 'dht_pin' in self.config:
             dht_dat=self.config['dht_pin']
+            dht_type=self.config['dht_vers']
         else:
             dht_dat=None
-        self.dev=ENS160(config['bus'][0],dht_pin=dht_dat,scl=scl,sda=sda)
+        self.dev=ENS160(config['bus'][0],dht_pin=dht_dat,scl=scl,sda=sda,dht_vers=dht_type)
     def getReading(self):
         t_c,h_c,aqi,tvoc,co2,eth=self.dev.getReading()
         return (self.r_id,{'temp':t_c,'humidity':h_c,'aqi':aqi,'TVOC':tvoc,'CO2':co2,'ethanol':eth,'sensor':'ENS160','AlertVal':0,'Threshold':100})

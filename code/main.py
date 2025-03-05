@@ -13,7 +13,7 @@ DISCON=0
 CONN=1
 ERR=2
 
-def setupLED(pin):                              # conveience function to setup pin for led, return machine.Pin object
+def setupLED(pin):                              # convenience function to setup pin for led, return machine.Pin object
     led_pin=Pin(pin,Pin.OUT)
     led_pin.off()
     return led_pin
@@ -86,7 +86,7 @@ class MqttClient:
                 self.log('[MqttClient] publish to %s/%s' % (self.machine_id,msg[0]),msg)
                 self.act_led.on()
                 try:
-                    topic='airquality_monitoring/%s:%s' % (self.machine_id,msg[0])
+                    topic='airquality_monitoring/%s-%s' % (self.machine_id,msg[0])
                     topic=topic.encode('UTF-8')
                     self.client.publish(topic,json.dumps(msg[1]))
                     self.log('[MqttClient] publish done')
@@ -323,15 +323,18 @@ def fakelog(*args):
 inhibit=Pin(22,machine.Pin.IN,machine.Pin.PULL_UP)
 #print(inhibit.value())
 if __name__=='__main__' and inhibit.value():
-    import network
-    config=readConf('node.conf')
+    import network,tomli
+    #config=readConf('node.conf')
+    c_f=open('node.toml','rb')
+    config=tomli.load(c_f)
+    c_f.close()
     print(config)
     net_conf=config.pop('network',None)
     if net_conf:
         net_err_led.on()
         wlan=connectNetwork(ssid=net_conf['ssid'],key=net_conf['key'])
     queue=Queue(20)
-    cli=MqttClient(config.pop('mqtt'),queue,print)
+    cli=MqttClient(net_conf.pop('mqtt'),queue,print)
     sched=Scheduler(queue)
     for key in config:
         # configure _dc module in scheduler
