@@ -1,6 +1,7 @@
-import machine,micropython,time
+import machine,micropython,time,array
 
 SAMPLE_FREQ=1
+DATA_TYPE='power'
 
 class DC:
     def __init__(self,conf,name):
@@ -13,6 +14,7 @@ class DC:
         self._totalizer=sum(self._buf)
         self.adc=machine.ADC(machine.Pin(conf['adc_pin']))
         self.adc_mult=3.3/65535
+        self._run=True
         self.timer.init(mode=machine.Timer.PERIODIC,freq=int(conf['mains_freq'])*10,callback=self.reading)
     def reading(self,timer):
         # do the reading here
@@ -33,4 +35,4 @@ class DC:
         irq_state=machine.disable_irq()
         r=self._reading
         machine.enable_irq(irq_state)
-        return (self.r_id,r)
+        return (self.r_id,DATA_TYPE,{'power_apparent':r})

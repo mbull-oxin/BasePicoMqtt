@@ -1,13 +1,24 @@
+[system]
+	inhibit_pin=0
+	[status]
+		type='None'
+		# options in this secion depend on type set above, example for trafficlight
+		#red_pin=<red led pin>
+		#amber_pin=<amber led pin>
+		#green_pin=<green led pin>
+		# example for RGB
+		#base_pin=<red anode pin>
 [network]
-	ssid='digitao'
-	key='y3ar_aud1o'
-[network.mqtt]
-	id='node_1'
-	server='oxin-ssem.local'
-	port=1883
+	ssid='<ssid of wifi network>'
+	key='<wpa passphrase>'
+	[mqtt]
+		id='node_1'
+		server='oxin-ssem.local'
+		port=1883
 [temp1]
 	module='max31855_dc'
 	address=[6,5]
+	ref_resistance=430
 [enviro1]
 	module='ens160_dc'
 	bus=[0,1,0]
