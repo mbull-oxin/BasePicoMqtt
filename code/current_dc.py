@@ -1,6 +1,6 @@
 import machine,micropython,time,array
 
-SAMPLE_FREQ=1
+SAMPLE_RATE=1
 DATA_TYPE='power'
 
 class DC:

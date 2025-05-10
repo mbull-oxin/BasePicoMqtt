@@ -2,8 +2,8 @@
 from _thread import allocate_lock,start_new_thread
 from _thread import exit as t_exit
 import umqtt.robust as mqtt
-from machine import Pin,PWM
-import machine,time,micropython,sys,json,datetime,network,ntptime,gc,binascii
+from machine import Pin
+import machine,array,time,micropython,sys,json,datetime,network,ntptime,gc
 
 micropython.alloc_emergency_exception_buf(200)
 gc.enable()
@@ -58,8 +58,9 @@ class TrafficLightStatus(StatusDisplay):
         self.warn_led=setupLED(amber_pin)
         self.ok_led=setupLED(green_pin)
         self.flash_cycle=True
-        self.timer=machine.Timer(mode=machine.Timer.PERIODIC,period=1,callback=self.setLEDs)
+        self.timer=machine.Timer(mode=machine.Timer.PERIODIC,period=1000,callback=self.setLEDs)
     def setLEDs(self,t):
+        #print('[timer]',self.timer,t)
         if t==self.timer:
             #alternate flash cycle
             self.flash_cycle=not self.flash_cycle
@@ -74,11 +75,13 @@ class TrafficLightStatus(StatusDisplay):
             elif self.err_stat:
                 #we have errors
                 self.err_led.on()
+                self.warn_led.off()
             elif self.warn_stat:
+                self.err_led.off()
                 if self.flash_cycle:
-                    self.err_led.on()
+                    self.warn_led.on()
                 else:
-                    self.err_led.off()
+                    self.warn_led.off()
             else:
                 # yay no errors or warnings...
                 self.err_led.off()
@@ -130,28 +133,33 @@ class RGBStatus(StatusDisplay):
 
 STATUS_MAP={'trafficlight':TrafficLightStatus,'RGB':RGBStatus}
 
+DISCON=0
 CONN=1
-DISCON=2
-ERR=3
+ERR=2
 
 class MqttClient:
     # wrap umqttsimple client and handle connection state / send all msg's from queue
-    def __init__(self,conf,queue,stat):
-        self.client=mqtt.MQTTClient(conf['id'],conf['server'],conf['port'])
+    def __init__(self,conf,stat,queue,log):
+        self.client=mqtt.MQTTClient(conf['id'],conf['server'],int(conf['port']))
         self._run=None
         self.con_stat=DISCON
         self.machine_id=conf['id']
-        self.stat=stat
-        self.stat.setStatus(STAT_WARN,mod='MQTT',msg='Mqtt client connecting to %s port %s' % (conf['server'],conf['port']))
+        self.log=log
+        #self.log('[MqttClient] connecting to %s' % conf['server'])
+        stat.setStatus(STAT_WARN,mod='MQTT',msg='connecting to %s' % conf['server'])
         try:
             self.client.connect(clean_session=True)
             self.con_stat=CONN
-            self.stat.setStatus(STAT_OK,mod='MQTT',msg='Mqtt client connected')
+            #self.log('[MqttClient] connected')
+            stat.setStatus(STAT_OK,mod='MQTT',msg='connected')
         except Exception as exc:
-            self.stat.setStatus(STAT_ERR,mod='MQTT',msg='Mqtt client failed to connect to broker')
+            self.log('[MqttClient] error connecting to broker',exc)
             self.con_stat=ERR
+            stat.setStatus(STAT_ERR,mod='MQTT',msg='error connecting to broker')
             #continue
         self.queue=queue
+        #self.act_led=setupLED(21)
+        self.stat=stat
     def run(self):
         self._run=True
         while self._run:
@@ -159,41 +167,40 @@ class MqttClient:
             try:
                 msg=queue.get(timeout=20)
             except StopIteration:
-                print('MqttClient] timeout')
+                #print('MqttClient] timeout')
                 continue
-            self.stat.setStatus(STAT_OK,'MQTT','sending '+repr(msg))
-            payload=msg[1]
+            self.log('[MqttClient] got',msg)
+            payload=msg[2]
             payload['machine']=self.machine_id
             t=time.localtime()
             payload['timestamp']=datetime.datetime(t[0],t[1],t[2],hour=t[3],minute=t[4],second=t[5]).isoformat()+'+00:00'
             if msg and self.con_stat!=CONN:
                 try:
-                    #self.log(self.client.port)
+                    self.log(self.client.port)
                     self.client.connect(clean_session=True)
                     self.con_stat=CONN
-                    self.stat.setStatus(STAT_OK,mod='MQTT',msg='Mqtt client connected')
-                    #self.log('[MqttClient] connected')
+                    self.log('[MqttClient] connected')
+                    self.stat.setStatus(STAT_OK,mod='MQTT',msg='connected')
                 except Exception as exc:
-                    #self.log('[MqttClient] error connecting to broker',exc)
-                    self.stat.setStatus(STAT_ERR,mod='MQTT',msg='Mqtt client failed to connect to broker')
-                    #self.log('[MqttClient] dropped msg -\n\tTopic - %s\n\tPayload - %s' % msg)
-                    self.stat.setStatus(STAT_ERR,mod='MQTT',msg='Mqtt client dropped msg -\n\tTopic - %s\n\tPayload - %s' % msg)
+                    self.log('[MqttClient] error connecting to broker',exc)
+                    self.log('[MqttClient] dropped msg -\n\tParameter - %s\n\tPayload - %s' % (msg[0],msg[2]))
+                    self.stat.setStatus(STAT_ERR,mod='MQTT',msg='Mqtt client dropped msg -\n\tParameter - %s\n\tPayload - %s' % (msg[0],msg[2]))
                     self.con_stat=ERR
                     continue
             if msg:
-                #self.log('[MqttClient] ,msg)
-                self.stat.setStatus(STAT_WARN,mod='MQTT',msg='publish to %s/%s' % (self.machine_id,msg[0]))
+                self.log('[MqttClient] publish to %s/%s' % (self.machine_id,msg[0]),msg)
+                #self.act_led.on()
                 try:
                     topic='%s_monitoring/%s-%s' % (msg[1],self.machine_id,msg[0])
                     topic=topic.encode('UTF-8')
-                    self.client.publish(topic,json.dumps(msg[2]))
-                    #self.log('[MqttClient] publish done')
-                    self.stat.setStatus(STAT_OK,mod='MQTT',msg='Mqtt publish done')
+                    self.client.publish(topic,json.dumps(payload))
+                    self.log('[MqttClient] publish done')
                 except Exception as exc:
-                    #self.log('[MqttClient] error publishing to broker',exc)
+                    self.log('[MqttClient] error publishing to broker',exc)
                     self.stat.setStatus(STAT_ERR,mod='MQTT',msg='error publishing to broker')
                     self.con_stat=ERR
                     continue
+                #self.act_led.off()
         self._run=None
     def stop(self):
         self._run=False
@@ -243,7 +250,7 @@ class Queue:
         micropython.schedule(self._release,timer)
 
 class Scheduler:
-    def __init__(self,queue,stat):
+    def __init__(self,stat,queue):
         self._queue=queue
         self.dc_inst={}
         self.samp_freq=0
@@ -257,7 +264,7 @@ class Scheduler:
         self._run=1
     def add(self,module,dc):
         mod_name=module.__name__
-        #print(mod_name,dc,self.req_samp_rates)
+        print(mod_name,dc,self.req_samp_rates)
         freq_change=False
         if mod_name not in self.req_samp_rates:
             self.req_samp_rates[mod_name]=module.SAMPLE_RATE
@@ -317,6 +324,44 @@ class Scheduler:
         while self._run==0:
             time.sleep(0.2)
 
+def parseValue(val_str):
+    val_str=val_str.strip("'")
+    val_str=val_str.strip('"')
+    if val_str.isdigit():
+        return int(val_str)
+    elif val_str.startswith('(') and val_str.endswith(')'):
+        # tuple break it down
+        l=[]
+        for val in val_str[1:-1].split(','):
+            l.append(parseValue(val))
+        return tuple(l)
+    else:
+        try:
+            return float(val_str)
+        except:
+            return val_str
+
+def readConf(fname):
+    config={}
+    _curr_section=None
+    c_f=open(fname,'r')
+    for c_l in c_f.readlines():
+        if '#' in c_l:
+            c_l,comment=c_l.split('#',1)
+        if '[' in c_l:
+            _curr_section=c_l[c_l.index('[')+1:c_l.index(']')]
+            config[_curr_section]={}
+        elif '=' in c_l:
+            key,val=c_l.strip().split('=',1)
+            val=parseValue(val)
+            if _curr_section:
+                config[_curr_section][key]=val
+            else:
+                config[key]=val
+    c_f.close()
+    return config
+
+# TODO: wrap these two in a class for network control to be integrated into mqtt client thread (or maybe make this main thread and launch / monitor mqtt client from here)
 def matchNetwork(ssid,sc_res):
     for net in sc_res:
         #net_err_led.off()
@@ -328,27 +373,30 @@ def matchNetwork(ssid,sc_res):
     return False
 
 def connectNetwork(stat,ssid='digitao',key='pass'):
+    stat.setStatus(STAT_ERR,mod='NETWORK',msg='network startup')
     wlan=network.WLAN(network.STA_IF)
     wlan.active(True)
     b_ssid=bytes(ssid,'UTF-8')
-    stat.setStatus(STAT_ERR,mod='NETWORK',msg='network startup')
+    #print(b_ssid,wlan.scan())
     while not matchNetwork(b_ssid,wlan.scan()):
-        stat.setStatus(STAT_ERR,mod='NETWORK',msg='Network %s not found' % b_ssid)
+        #print('[ERR] network %s not found' % ssid)
+        stat.setStatus(STAT_WARN,mod='NETWORK',msg='network %s not found' % ssid)
         time.sleep(3)
     while not wlan.isconnected():
+        #net_conn_led.on()
         wlan.connect(ssid,key)
-        time.sleep_ms(50)
-        stat.setStatus(STAT_WARN,mod='NETWORK',msg='Trying to connect to network')
-        time.sleep(3)
+        time.sleep(5)
         if not wlan.isconnected():
-            stat.setStatus(STAT_ERR,mod='NETWORK',msg='network connection failed')
+            stat.setStatus(STAT_WARN,mod='NETWORK',msg='No connection - retry')
     #print('network confg',wlan.ifconfig())
-    stat.setStatus(STAT_WARN,mod='NETWORK',msg='Checking for internet')
+    #net_conn_led.off()
     ntptime.settime()
-    stat.setStatus(STAT_OK,mod='NETWORK',msg='Network connected')
+    stat.setStatus(STAT_OK,mod='NETWORK',msg='network connected')
+    return wlan
 
 if __name__=='__main__':
     import network,tomli
+    #config=readConf('node.conf')
     c_f=open('node.toml','rb')
     config=tomli.load(c_f)
     c_f.close()
@@ -362,12 +410,14 @@ if __name__=='__main__':
         status_disp=StatusDisplay(**sys_conf['status'])
     else:
         status_disp=STATUS_MAP[sys_conf['status']['type']](**sys_conf['status'])
+    status_disp.setStatus(STAT_WARN,mod='SYSTEM',msg='system startup')
     net_conf=config.pop('network',None)
     if net_conf:
+        #net_err_led.on()
         wlan=connectNetwork(status_disp,ssid=net_conf['ssid'],key=net_conf['key'])
     queue=Queue(20)
-    cli=MqttClient(net_conf.pop('mqtt'),queue,status_disp)
-    sched=Scheduler(queue,status_disp)
+    cli=MqttClient(net_conf.pop('mqtt'),status_disp,queue,print)
+    sched=Scheduler(status_disp,queue)
     for key in config:
         # configure _dc module in scheduler
         if 'module' in config[key] and config[key]['module'] not in sys.modules:
@@ -378,6 +428,7 @@ if __name__=='__main__':
         dc_inst=ds_m.DC(config[key],key)
         sched.add(ds_m,dc_inst)
     start_new_thread(sched.run,(),{})
+    status_disp.setStatus(STAT_OK,mod='SYSTEM',msg='Scheduler Started')
     try:
         cli.run()
     except Exception as exc:

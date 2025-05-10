@@ -8,7 +8,7 @@
 #######################################################################################
 import math
 from max31865 import Max31865
-SAMPLE_FREQ=1
+SAMPLE_RATE=1
 DATA_TYPE='temperature'
 
 class DC:

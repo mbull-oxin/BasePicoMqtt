@@ -6,7 +6,6 @@ import onewire,ds18x20,binascii
 
 # sample rate in hz max 1000
 SAMPLE_RATE=1
-DATA_TYPE='temperature'
 
 ds_registry={}
 
@@ -28,10 +27,6 @@ class DC:
         global ds_registry
         self.name=name
         self.conf=conf
-        if 'threshold' in self.conf:
-            self.threshold=self.conf['threshold']
-        else:
-            self.threshold=30
         pin_no=self.conf['addr'][0]
         rom_addr=binascii.unhexlify(self.conf['addr'][1])
         if pin_no not in ds_registry:
@@ -44,6 +39,5 @@ class DC:
         self.rom=rom_addr
     def getReading(self):
         self.ds.convert()
-        temp=self.ds.read_temp(self.rom)
-        return (self.name,DATA_TYPE,{'temp':temp,'AlertVal':temp>=self.threshold,'Threshold':self.threshold,'sensor':self.name})
+        return (self.name,'temperature',{'temp':self.ds.read_temp(self.rom),'AlertVal':0,'Threshold':50,'ThresholdHigh':50,'ThresholdLow':0,'sensor':self.name})
 

@@ -1,7 +1,7 @@
 import dht
 from machine import Pin
 
-SAMPLE_FREQ=1  # 10 hz sample freq....
+SAMPLE_RATE=1  # 10 hz sample freq....
 DATA_TYPE='humidity'
 
 class DC:

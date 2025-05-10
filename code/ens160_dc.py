@@ -52,7 +52,6 @@ ENS160_COMMAND_GET_APPVER = 0x0E
 ENS160_COMMAND_CLRGPR = 0xCC
 
 SAMPLE_RATE=1
-DATA_TYPE='airquality'
 
 class ENS160:
     @staticmethod
@@ -90,7 +89,7 @@ class ENS160:
         self._bus.writeto_mem(self.dev,ENS160_OPMODE_REG,b'\x02')
     def updateTH(self,timer):
         '''update temp and humidity from dht on a schedule'''
-        if timer==self._dht_timer and self.dht:
+        if timer==self._dht_timer:
             self.dht.measure()
             t=self.dht.temperature()
             if self._curr_temp!=t:
@@ -133,7 +132,7 @@ class DC:
         self.dev=ENS160(config['bus'][0],dht_pin=dht_dat,scl=scl,sda=sda,dht_vers=dht_type)
     def getReading(self):
         t_c,h_c,aqi,tvoc,co2,eth=self.dev.getReading()
-        return (self.r_id,DATA_TYPE,{'temp':t_c,'humidity':h_c,'aqi':aqi,'TVOC':tvoc,'CO2':co2,'ethanol':eth,'sensor':'ENS160','AlertVal':0,'Threshold':100})
+        return (self.r_id,'airquality',{'temp':t_c,'humidity':h_c,'aqi':aqi,'TVOC':tvoc,'CO2':co2,'ethanol':eth,'sensor':self.r_id,'AlertVal':0,'Threshold':100,'ThresholdHigh':100,'ThresholdLow':100})
 
 if __name__=='__main__':
     import time
