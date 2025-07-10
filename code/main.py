@@ -3,7 +3,7 @@ from _thread import allocate_lock,start_new_thread
 from _thread import exit as t_exit
 import umqtt.robust as mqtt
 from machine import Pin
-import machine,array,time,micropython,sys,json,datetime,network,ntptime,gc
+import machine,binascii,time,micropython,sys,json,datetime,network,ntptime,gc
 
 micropython.alloc_emergency_exception_buf(200)
 gc.enable()
@@ -240,6 +240,11 @@ class Queue:
                 return self._queue.pop(0)
         else:
             raise(StopIteration())
+        if self._queue:
+            try:
+                self._evt.release()
+            except RuntimeError:
+                pass
     def _release(self,timer):
         timer.deinit()
         try:
@@ -256,7 +261,7 @@ class Scheduler:
         self.samp_freq=0
         self.req_samp_rates={}
         self._multipliers={}
-        self.readings=[]
+        self._values_cache={}
         self._count=0
         self._timer=None
         self.req_sample_rates={}
@@ -264,7 +269,7 @@ class Scheduler:
         self._run=1
     def add(self,module,dc):
         mod_name=module.__name__
-        print(mod_name,dc,self.req_samp_rates)
+        #print(mod_name,dc,self.req_samp_rates)
         freq_change=False
         if mod_name not in self.req_samp_rates:
             self.req_samp_rates[mod_name]=module.SAMPLE_RATE
@@ -310,8 +315,23 @@ class Scheduler:
     def _run_mult(self,mult):
         for mod in self._multipliers[mult]:
             for dc in self.dc_inst[mod]:
-                print('[Scheduler._run_mult]',dc)
-                self._queue.put(dc.getReading())
+                #print('[Scheduler._run_mult]',dc)
+                readings=dc.getReading()
+                if not readings:
+                    continue
+                if type(readings[0]) in (list,tuple):
+                    for reading in readings:
+                        # save the data in a dictionary according to the r_id...
+                        self._values_cache[reading[1]]=reading[2]
+                        self._queue.put(reading)
+                else:
+                    # save the data in a dictionary according to the r_id...
+                    self._values_cache[readings[1]]=readings[2]
+                    self._queue.put(readings)
+    #def getLastReading(self,data_type):
+    #    if data_type in self._values_cache:
+    #        for r_id,
+    #        return self._values_cache[data_type]
     def isr(self,timer):
         self._count=self._count+1
         #print('[Scheduler.isr] count',self._count)

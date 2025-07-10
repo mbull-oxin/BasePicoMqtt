@@ -111,7 +111,7 @@ class ENS160:
         return (self._curr_temp,self._curr_humidity,aqi[0],struct.unpack('<H',tvoc)[0],struct.unpack('<H',co2)[0],struct.unpack('<H',eth)[0])
 
 class DC:
-    def __init__(self,config,name):
+    def __init__(self,config,name,ctrl=None):
         self.config=config
         self.r_id=name
         if len(self.config['bus'])>1:

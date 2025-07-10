@@ -12,7 +12,7 @@ SAMPLE_RATE=1
 DATA_TYPE='temperature'
 
 class DC:
-    def __init__(self,config,name):
+    def __init__(self,config,name,ctrl=None):
         spi_ck,spi_cs=config['addr']
         if spi_ck in (2,6,18):
             spi_bus=0

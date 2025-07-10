@@ -1,0 +1,49 @@
+[system]
+	inhibit=0
+[system.status]
+    type='None'
+    # options in this secion depend on type set above, example for trafficlight
+    #red_pin=<red led pin>
+    #amber_pin=<amber led pin>
+    #green_pin=<green led pin>
+    # example for RGB
+    #base_pin=<red anode pin>
+[network]
+	ssid='StEvalMachines&iotWiFi'
+	key='BitCurveTherefore3'
+[network.mqtt]
+	id='node_1'
+	server='oxin-multdb.local'
+	port=1883
+[temp1]
+	module='max31865_dc'
+	addr=[6,8]
+	# optional
+	wires=3
+	ref=430
+[temp2]
+	module='max31865_dc'
+	addr=[6,5]
+	# optional
+	wires=3
+	ref=430
+[temp3]
+	module='max31865_dc'
+	addr=[6,18]
+	# optional
+	wires=3
+	ref=430
+[temp4]
+	module='max31865_dc'
+	addr=[6,19]
+	# optional
+	wires=3
+	ref=430
+[enviro1]
+	module='ens160_dc'
+	bus=[0,21,20]
+	dht_pin=14
+	dht_vers=22
+#[amb_temp]
+#    module='dht11_dc'
+#    address=14

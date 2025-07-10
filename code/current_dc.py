@@ -4,7 +4,7 @@ SAMPLE_RATE=1
 DATA_TYPE='power'
 
 class DC:
-    def __init__(self,conf,name):
+    def __init__(self,conf,name,ctrl=None):
         self.conf=conf
         self.r_id=name
         self.timer=machine.Timer()
